@@ -20,29 +20,159 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR VISUAL APPEAL ---
+# --- CUSTOM CSS FOR PINK & WHITE THEME ---
 st.markdown("""
 <style>
+    /* Main App Background */
+    .main {
+        background-color: #FFFFFF;
+    }
+    
+    /* Header Styling */
     .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1e3a8a;
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #FF69B4 0%, #FFB6C1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 2rem;
+        padding: 1rem;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-    }
-    .stProgress > div > div > div > div {
-        background: linear-gradient(to right, #667eea, #764ba2);
-    }
+    
+    /* Metric Cards */
     div[data-testid="stMetricValue"] {
         font-size: 2rem;
         font-weight: bold;
+        color: #FF1493;
+    }
+    
+    div[data-testid="stMetricLabel"] {
+        color: #C71585;
+        font-weight: 600;
+    }
+    
+    div[data-testid="stMetricDelta"] {
+        color: #FF69B4;
+    }
+    
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(to right, #FF69B4, #FFB6C1, #FFC0CB);
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #FF69B4 0%, #FFB6C1 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        box-shadow: 0 4px 6px rgba(255, 105, 180, 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #FF1493 0%, #FF69B4 100%);
+        box-shadow: 0 6px 12px rgba(255, 105, 180, 0.4);
+        transform: translateY(-2px);
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #FFE4F0 0%, #FFF0F5 100%);
+    }
+    
+    /* Form Inputs */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > select,
+    .stDateInput > div > div > input {
+        border: 2px solid #FFB6C1;
+        border-radius: 8px;
+        background-color: #FFFFFF;
+    }
+    
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #FF69B4;
+        box-shadow: 0 0 0 0.2rem rgba(255, 105, 180, 0.25);
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: #FFE4F0;
+        border-radius: 8px;
+        color: #C71585;
+        font-weight: 600;
+    }
+    
+    /* Info/Success/Warning/Error Boxes */
+    .stAlert {
+        border-radius: 10px;
+        border-left: 5px solid #FF69B4;
+    }
+    
+    /* Dataframe */
+    .dataframe {
+        border: 2px solid #FFB6C1 !important;
+        border-radius: 8px;
+    }
+    
+    /* Radio Buttons */
+    .stRadio > label {
+        color: #C71585;
+        font-weight: 600;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: #FFE4F0;
+        border-radius: 8px 8px 0px 0px;
+        color: #C71585;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #FF69B4 0%, #FFB6C1 100%);
+        color: white;
+    }
+    
+    /* Section Dividers */
+    hr {
+        border-color: #FFB6C1;
+    }
+    
+    /* Custom Card Styling */
+    .metric-card {
+        background: linear-gradient(135deg, #FFE4F0 0%, #FFF0F5 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border: 2px solid #FFB6C1;
+        box-shadow: 0 4px 6px rgba(255, 182, 193, 0.3);
+        margin: 0.5rem 0;
+    }
+    
+    /* Download Button Special Styling */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #FF1493 0%, #FF69B4 100%);
+        color: white;
+        font-weight: 600;
+        border-radius: 8px;
+    }
+    
+    /* Plotly Chart Backgrounds */
+    .js-plotly-plot {
+        border-radius: 10px;
+        border: 2px solid #FFE4F0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -98,9 +228,13 @@ def get_current_quarter():
 CURRENT_Q = get_current_quarter()
 
 # --- SIDEBAR NAVIGATION ---
-st.sidebar.image("https://via.placeholder.com/150x100/667eea/ffffff?text=RealtorOS", use_container_width=True)
-st.sidebar.title("🏘️ RealtorOS Manager")
-st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div style='text-align: center; padding: 1rem; background: linear-gradient(135deg, #FF69B4 0%, #FFB6C1 100%); border-radius: 10px; margin-bottom: 1rem;'>
+    <h1 style='color: white; margin: 0; font-size: 2rem;'>🏘️</h1>
+    <h2 style='color: white; margin: 0.5rem 0 0 0; font-size: 1.5rem;'>RealtorOS</h2>
+    <p style='color: white; margin: 0.25rem 0 0 0; font-size: 0.9rem;'>Sales Manager</p>
+</div>
+""", unsafe_allow_html=True)
 
 page = st.sidebar.radio(
     "Navigation",
@@ -109,7 +243,14 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.info(f"**Current Quarter:** {CURRENT_Q}\n\n**Target:** {QUARTERLY_TARGETS[CURRENT_Q]} plots")
+st.sidebar.markdown(f"""
+<div class='metric-card'>
+    <p style='color: #C71585; font-weight: 600; margin-bottom: 0.5rem;'>📅 Current Quarter</p>
+    <h3 style='color: #FF1493; margin: 0;'>{CURRENT_Q}</h3>
+    <p style='color: #C71585; font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem;'>🎯 Target</p>
+    <h3 style='color: #FF1493; margin: 0;'>{QUARTERLY_TARGETS[CURRENT_Q]} Plots</h3>
+</div>
+""", unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS ---
 def get_ai_advice(sales_data, current_performance, target):
@@ -162,7 +303,7 @@ def create_pdf_report(sales_data, analysis_text):
         'CustomTitle',
         parent=styles['Heading1'],
         fontSize=24,
-        textColor=colors.HexColor('#1e3a8a'),
+        textColor=colors.HexColor('#FF1493'),
         spaceAfter=30,
         alignment=1
     )
@@ -185,7 +326,7 @@ def create_pdf_report(sales_data, analysis_text):
     
     summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
     summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FF69B4')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -234,7 +375,7 @@ if page == "📊 Dashboard":
         st.metric("✅ Achievement", f"{achievement:.1f}%")
     
     # Progress Bar
-    st.markdown("### Quarterly Progress")
+    st.markdown("### 🎯 Quarterly Progress")
     st.progress(min(progress, 1.0))
     
     if progress < 0.25:
@@ -255,16 +396,18 @@ if page == "📊 Dashboard":
             location_data = st.session_state.sales_data['Location'].value_counts().reset_index()
             location_data.columns = ['Location', 'Count']
             fig1 = px.bar(location_data, x='Location', y='Count', 
-                         color='Count', color_continuous_scale='Viridis')
-            fig1.update_layout(showlegend=False, height=400)
+                         color='Count', 
+                         color_continuous_scale=['#FFB6C1', '#FF69B4', '#FF1493'])
+            fig1.update_layout(showlegend=False, height=400, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig1, use_container_width=True)
         
         with col2:
             st.markdown("### 👥 Agent Performance")
             agent_data = st.session_state.sales_data['Agent'].value_counts().reset_index()
             agent_data.columns = ['Agent', 'Sales']
-            fig2 = px.pie(agent_data, names='Agent', values='Sales', hole=0.4)
-            fig2.update_layout(height=400)
+            fig2 = px.pie(agent_data, names='Agent', values='Sales', hole=0.4,
+                         color_discrete_sequence=['#FF69B4', '#FFB6C1', '#FF1493', '#FFC0CB'])
+            fig2.update_layout(height=400, paper_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig2, use_container_width=True)
         
         # Revenue Trend
@@ -273,7 +416,9 @@ if page == "📊 Dashboard":
         revenue_data['Date'] = pd.to_datetime(revenue_data['Date'])
         revenue_trend = revenue_data.groupby('Date')['Price'].sum().reset_index()
         fig3 = px.line(revenue_trend, x='Date', y='Price', markers=True)
-        fig3.update_layout(yaxis_title="Revenue (KSh)", height=400)
+        fig3.update_traces(line_color='#FF69B4', marker=dict(color='#FF1493', size=10))
+        fig3.update_layout(yaxis_title="Revenue (KSh)", height=400, 
+                          paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig3, use_container_width=True)
     else:
         st.info("📊 No sales data yet. Start logging sales to see analytics!")
@@ -353,9 +498,13 @@ elif page == "🤖 AI Coach":
     st.markdown('<p class="main-header">🤖 AI Sales Strategy Coach</p>', unsafe_allow_html=True)
     
     st.markdown("""
-    Get personalized, AI-powered recommendations based on your current performance.
-    The AI analyzes your sales data and provides actionable strategies specific to the Kangundo Road market.
-    """)
+    <div style='background: linear-gradient(135deg, #FFE4F0 0%, #FFF0F5 100%); padding: 1.5rem; border-radius: 10px; border: 2px solid #FFB6C1; margin-bottom: 2rem;'>
+        <p style='color: #C71585; margin: 0; font-size: 1.1rem;'>
+            ✨ Get personalized, AI-powered recommendations based on your current performance.
+            The AI analyzes your sales data and provides actionable strategies specific to the Kangundo Road market.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     total_sales = len(st.session_state.sales_data)
     target = QUARTERLY_TARGETS[CURRENT_Q]
@@ -371,7 +520,11 @@ elif page == "🤖 AI Coach":
         with st.spinner("🤖 AI is analyzing your performance..."):
             advice = get_ai_advice(st.session_state.sales_data, total_sales, target)
             st.markdown("### 💡 AI-Powered Recommendations")
-            st.markdown(advice)
+            st.markdown(f"""
+            <div style='background: white; padding: 1.5rem; border-radius: 10px; border: 2px solid #FFB6C1;'>
+                {advice}
+            </div>
+            """, unsafe_allow_html=True)
             
             # Store advice for report generation
             st.session_state['last_ai_advice'] = advice
@@ -471,5 +624,10 @@ elif page == "📑 Reports":
 
 # --- FOOTER ---
 st.sidebar.markdown("---")
-st.sidebar.caption("RealtorOS v1.0 | Powered by Gemini AI")
-st.sidebar.caption("© 2026 Kangundo Road Sales")
+st.sidebar.markdown("""
+<div style='text-align: center; padding: 1rem; color: #C71585;'>
+    <p style='margin: 0; font-weight: 600;'>RealtorOS v1.0</p>
+    <p style='margin: 0.25rem 0; font-size: 0.9rem;'>Powered by Gemini AI 💫</p>
+    <p style='margin: 0; font-size: 0.8rem;'>© 2026 Kangundo Road Sales</p>
+</div>
+""", unsafe_allow_html=True)
