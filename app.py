@@ -259,7 +259,7 @@ def get_ai_advice(sales_data, current_performance, target):
         return "⚠️ Please add your GEMINI_API_KEY to Streamlit secrets to enable AI Coach."
     
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         # Prepare context
         total_sales = len(sales_data)
@@ -354,7 +354,7 @@ def create_pdf_report(sales_data, analysis_text):
 
 # --- PAGE 1: DASHBOARD ---
 if page == "📊 Dashboard":
-    st.markdown('<p class="main-header">📊 Sales Dashboard - Kangundo Road</p>', unsafe_allow_html=True)
+    st.markdown('<p class="main-header">📊 Sales Report</p>', unsafe_allow_html=True)
     
     # Key Metrics
     total_sales = len(st.session_state.sales_data)
