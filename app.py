@@ -271,7 +271,7 @@ def get_ai_advice(sales_data, current_performance, target):
         return "⚠️ Please add your GEMINI_API_KEY to Streamlit secrets to enable AI Coach."
     
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         total_sales = len(sales_data)
         revenue = sales_data['Price'].sum() if not sales_data.empty else 0
