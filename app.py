@@ -686,28 +686,27 @@ client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
         st.markdown("Click the button below to test your Google Sheets connection:")
         
         if st.button("🧪 Test Connection", use_container_width=True):
-            with st.spinner("Testing connection..."):
-                <invoke name="artifacts">
-<parameter name="command">update</parameter>
-<parameter name="id">realtor_gsheets</parameter>
-<parameter name="old_str">        if st.button("🧪 Test Connection", use_container_width=True):
-            with st.spinner("Testing connection..."):</parameter>
-<parameter name="new_str">        if st.button("🧪 Test Connection", use_container_width=True):
-            with st.spinner("Testing connection..."):
-                client = get_gsheet_client()
-                if client:
-                    st.success("✅ Successfully connected to Google Sheets API!")
-                if SPREADSHEET_ID:
-                    spreadsheet = get_spreadsheet()
-                    if spreadsheet:
-                        st.success(f"✅ Successfully accessed spreadsheet: {spreadsheet.title}")
-                        st.info(f"📊 [Open Spreadsheet]({st.session_state.sheet_url})")
-                    else:
-                        st.error("❌ Could not access spreadsheet. Check the SPREADSHEET_ID and sharing permissions.")
+    with st.spinner("Testing connection..."):
+        # 1. Check Google Sheets Client Connection
+        client = get_gsheet_client()
+        
+        if client:
+            st.success("✅ Successfully connected to Google Sheets API!")
+            
+            # 2. Check Spreadsheet Access
+            if SPREADSHEET_ID:
+                spreadsheet = get_spreadsheet()
+                if spreadsheet:
+                    st.success(f"✅ Successfully accessed spreadsheet: {spreadsheet.title}")
+                    # Ensure sheet_url exists in session_state before calling it
+                    url = st.session_state.get('sheet_url', '#')
+                    st.info(f"📊 [Open Spreadsheet]({url})")
                 else:
-                    st.warning("⚠️ SPREADSHEET_ID not found in secrets. Add it to connect to your sheet.")
+                    st.error("❌ Could not access spreadsheet. Check the SPREADSHEET_ID and sharing permissions.")
             else:
-                st.error("❌ Could not connect. Check your credentials in Streamlit secrets.")
+                st.warning("⚠️ SPREADSHEET_ID not found in secrets. Add it to connect to your sheet.")
+        else:
+            st.error("❌ Could not connect. Check your credentials in Streamlit secrets.")
 
 st.markdown("---")
 
@@ -732,4 +731,4 @@ with col3:
     if "gcp_service_account" in st.secrets:
         st.success("✅ GCP Credentials")
     else:
-        st.error("❌ GCP Credentials Missing")</parameter>
+        st.error("❌ GCP Credentials Missing")
