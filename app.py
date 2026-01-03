@@ -80,13 +80,28 @@ def load_data():
         ws = sh.sheet1
         data = ws.get_all_values()
         
+        # Define expected headers
+        expected_headers = ['Date', 'Agent', 'Location', 'Price', 'Status', 'Client_Name', 'Phone', 'Notes']
+        
         # Initialize headers if sheet is empty
         if not data or len(data) == 0:
-            headers = ['Date', 'Agent', 'Location', 'Price', 'Status', 'Client_Name', 'Phone', 'Notes']
-            ws.append_row(headers)
-            return pd.DataFrame(columns=headers)
+            ws.append_row(expected_headers)
+            st.sidebar.info("✅ Initialized Google Sheet with headers")
+            return pd.DataFrame(columns=expected_headers)
         
-        # Create DataFrame
+        # Check if first row matches expected headers
+        if data[0] != expected_headers:
+            st.sidebar.warning("⚠️ Sheet headers don't match expected format. Fixing...")
+            # Clear sheet and add correct headers
+            ws.clear()
+            ws.append_row(expected_headers)
+            return pd.DataFrame(columns=expected_headers)
+        
+        # If only headers exist (no data rows)
+        if len(data) == 1:
+            return pd.DataFrame(columns=expected_headers)
+        
+        # Create DataFrame with data
         df = pd.DataFrame(data[1:], columns=data[0])
         
         # Clean and convert data types
@@ -100,9 +115,11 @@ def load_data():
         
     except gspread.exceptions.SpreadsheetNotFound:
         st.sidebar.error(f"❌ Spreadsheet not found. Check SPREADSHEET_ID: {SPREADSHEET_ID}")
+        st.sidebar.info("💡 Make sure you've shared the sheet with the service account email")
         return pd.DataFrame()
     except gspread.exceptions.APIError as e:
         st.sidebar.error(f"❌ Google Sheets API error: {e}")
+        st.sidebar.info("💡 Check if Google Sheets API is enabled in GCP Console")
         return pd.DataFrame()
     except Exception as e:
         st.sidebar.error(f"❌ Error loading data: {e}")
@@ -130,7 +147,7 @@ if page == "📊 Dashboard & AI Coach":
     st.markdown('<p class="main-header">📊 Executive Dashboard</p>', unsafe_allow_html=True)
     df = st.session_state.sales_data
     
-    if not df.empty:
+    if not df.empty and 'Price' in df.columns and len(df) > 0:
         # Top Metrics
         m1, m2, m3, m4 = st.columns(4)
         total_rev = df['Price'].sum()
@@ -150,7 +167,7 @@ if page == "📊 Dashboard & AI Coach":
         
         # AI SALES COACH SECTION
         st.markdown("---")
-        st.subheader("🤖 AI Sales Coach (Gemini 2.5 Flash)")
+        st.subheader("🤖 AI Sales Coach (Gemini 2.0 Flash)")
         
         if st.button("🧠 Analyze My Sales Performance"):
             if not GEMINI_API_KEY:
@@ -159,7 +176,7 @@ if page == "📊 Dashboard & AI Coach":
                 try:
                     with st.spinner("🔮 Gemini is analyzing your data..."):
                         # Use Gemini 2.0 Flash (latest available model)
-                        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                        model = genai.GenerativeModel('gemini-2.5-flash')
                         
                         # Prepare comprehensive data summary
                         location_summary = df.groupby('Location')['Price'].agg(['sum', 'count']).to_string()
@@ -202,7 +219,7 @@ if page == "📊 Dashboard & AI Coach":
         c1, c2 = st.columns(2)
         
         with c1:
-            if 'Location' in df.columns and 'Price' in df.columns:
+            if 'Location' in df.columns and 'Price' in df.columns and len(df) > 0:
                 fig_loc = px.pie(df, names='Location', values='Price', 
                                title="Revenue Distribution by Location", 
                                hole=0.5,
@@ -210,7 +227,7 @@ if page == "📊 Dashboard & AI Coach":
                 st.plotly_chart(fig_loc, use_container_width=True)
         
         with c2:
-            if 'Agent' in df.columns and 'Price' in df.columns:
+            if 'Agent' in df.columns and 'Price' in df.columns and len(df) > 0:
                 agent_perf = df.groupby('Agent')['Price'].sum().reset_index()
                 fig_agent = px.bar(agent_perf, x='Agent', y='Price',
                                   title="Revenue by Agent",
@@ -219,7 +236,7 @@ if page == "📊 Dashboard & AI Coach":
                 st.plotly_chart(fig_agent, use_container_width=True)
         
         # Sales trend over time
-        if 'Date' in df.columns and not df['Date'].isna().all():
+        if 'Date' in df.columns and not df['Date'].isna().all() and len(df) > 0:
             df_sorted = df.sort_values('Date')
             fig_trend = px.line(df_sorted, x='Date', y='Price', 
                               title="Sales Trend Over Time",
@@ -227,10 +244,26 @@ if page == "📊 Dashboard & AI Coach":
             st.plotly_chart(fig_trend, use_container_width=True)
     else:
         st.info("📊 No sales data available yet. Start by logging your first sale!")
-        st.markdown("### Quick Start Guide:")
-        st.markdown("1. Go to **📝 Log New Sale** to record transactions")
-        st.markdown("2. Set your **🎯 Revenue Targets**")
-        st.markdown("3. Return here to view analytics and AI insights")
+        
+        # Connection troubleshooting
+        if not SPREADSHEET_ID:
+            st.error("❌ SPREADSHEET_ID not configured in secrets")
+        elif not get_gsheet_client():
+            st.error("❌ Google Sheets connection failed")
+            st.markdown("""
+            ### 🔧 Troubleshooting Steps:
+            1. **Share your Google Sheet** with: `my-sheet-robot@realtoros-483209.iam.gserviceaccount.com`
+            2. **Enable APIs** in Google Cloud Console:
+               - Google Sheets API
+               - Google Drive API
+            3. **Check secrets** formatting in Streamlit Cloud
+            4. Click **🔄 Refresh Data** in the sidebar after fixing
+            """)
+        else:
+            st.markdown("### Quick Start Guide:")
+            st.markdown("1. Go to **📝 Log New Sale** to record transactions")
+            st.markdown("2. Set your **🎯 Revenue Targets**")
+            st.markdown("3. Return here to view analytics and AI insights")
 
 # --- PAGE 2: LOG NEW SALE ---
 elif page == "📝 Log New Sale":
@@ -372,7 +405,7 @@ elif page == "📑 Reports & PDF":
     st.markdown('<p class="main-header">📑 Sales Reports & Export</p>', unsafe_allow_html=True)
     df = st.session_state.sales_data
     
-    if not df.empty:
+    if not df.empty and 'Price' in df.columns and len(df) > 0:
         # Display summary metrics
         col1, col2, col3 = st.columns(3)
         col1.metric("Total Sales", len(df))
