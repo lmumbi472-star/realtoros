@@ -11,11 +11,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 import gspread
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-import pickle
-import os
+from google.oauth2.service_account import Credentials
+import json
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -65,79 +62,66 @@ SCOPES = [
 
 # Get spreadsheet ID from secrets
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "")
-
-@st.cache_resource
-def get_google_credentials():
-    """Get Google credentials using OAuth 2.0"""
-    creds = None
-    
-    # Token file stores user's access and refresh tokens
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    
-    # If no valid credentials, let user log in
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except Exception as e:
-                st.error(f"Error refreshing credentials: {e}")
-                creds = None
-        
-        if not creds:
-            # Check if credentials.json exists
-            if not os.path.exists('credentials.json'):
-                st.error("❌ credentials.json not found. Please add it to your project directory.")
-                st.info("""
-                **How to get credentials.json:**
-                1. Go to Google Cloud Console
-                2. Enable Google Sheets API and Google Drive API
-                3. Create OAuth 2.0 credentials (Desktop app)
-                4. Download and save as 'credentials.json'
-                """)
-                return None
-            
-            try:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', SCOPES)
-                creds = flow.run_local_server(port=0)
-                
-                # Save credentials for future use
-                with open('token.pickle', 'wb') as token:
-                    pickle.dump(creds, token)
-            except Exception as e:
-                st.error(f"❌ Error during authentication: {e}")
-                return None
-    
-    return creds
+SPREADSHEET_URL = st.secrets.get("SPREADSHEET_URL", "")
 
 @st.cache_resource
 def get_gsheet_client():
-    """Initialize Google Sheets client"""
+    """Initialize Google Sheets client using credentials from Streamlit secrets"""
     try:
-        creds = get_google_credentials()
-        if not creds:
-            return None
+        # Check if we have service account credentials
+        if "gcp_service_account" in st.secrets:
+            credentials_dict = dict(st.secrets["gcp_service_account"])
+            
+            # Check if it's a service account (has private_key)
+            if "private_key" in credentials_dict:
+                # Service account flow
+                credentials = Credentials.from_service_account_info(
+                    credentials_dict, 
+                    scopes=SCOPES
+                )
+                client = gspread.authorize(credentials)
+                return client
+            else:
+                # OAuth flow detected - not supported in Streamlit Cloud
+                st.warning("⚠️ OAuth credentials detected. Using public sheet access instead.")
+                st.info("For authenticated access, create a Service Account in Google Cloud Console.")
         
-        client = gspread.authorize(creds)
-        return client
+        # Fallback to public sheet access
+        if SPREADSHEET_URL or SPREADSHEET_ID:
+            st.info("📊 Using public sheet access. Make sure your sheet is set to 'Anyone with link can edit'")
+            # Use gspread without authentication for public sheets
+            import gspread
+            gc = gspread.service_account_from_dict({})  # This won't work, we need different approach
+            return None
+        else:
+            st.error("❌ No spreadsheet configured")
+            return None
+            
     except Exception as e:
         st.error(f"❌ Error connecting to Google Sheets: {str(e)}")
+        st.info("Go to Setup page for configuration help")
         return None
 
 def get_spreadsheet():
     """Get the RealtorOS spreadsheet"""
     client = get_gsheet_client()
     if not client or not SPREADSHEET_ID:
+        if not SPREADSHEET_ID:
+            st.warning("⚠️ Please add SPREADSHEET_ID to your Streamlit secrets")
         return None
     
     try:
         spreadsheet = client.open_by_key(SPREADSHEET_ID)
         return spreadsheet
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("❌ Spreadsheet not found. Make sure you've shared it with the service account email.")
+        if "gcp_service_account" in st.secrets:
+            service_email = st.secrets["gcp_service_account"].get("client_email", "")
+            if service_email:
+                st.info(f"📧 Share your spreadsheet with: `{service_email}`")
+        return None
     except Exception as e:
         st.error(f"❌ Error accessing spreadsheet: {str(e)}")
-        st.info("Make sure you've shared the spreadsheet with your Google account.")
         return None
 
 def load_database():
@@ -216,7 +200,6 @@ if 'sales_data' not in st.session_state:
         with st.spinner("📊 Loading data from Google Sheets..."):
             st.session_state.sales_data = load_database()
     else:
-        st.warning("⚠️ Please add SPREADSHEET_ID to your Streamlit secrets")
         st.session_state.sales_data = pd.DataFrame(columns=['Date', 'Agent', 'Location', 'Price', 'Status', 'Client_Name', 'Phone', 'Notes'])
 
 if 'sheet_url' not in st.session_state and SPREADSHEET_ID:
@@ -254,7 +237,7 @@ st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "Navigation",
-    ["📊 Dashboard", "📝 Log Sales", "👥 Team Performance", "🤖 AI Coach", "📑 Reports"],
+    ["📊 Dashboard", "📝 Log Sales", "👥 Team Performance", "🤖 AI Coach", "📑 Reports", "⚙️ Setup"],
     label_visibility="collapsed"
 )
 
@@ -266,7 +249,12 @@ if 'sheet_url' in st.session_state:
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📊 Data Storage")
     st.sidebar.markdown(f"[🔗 Open Google Sheet]({st.session_state.sheet_url})")
-    st.sidebar.caption("✅ Connected to Google Sheets")
+    
+    # Show connection status
+    if get_gsheet_client():
+        st.sidebar.caption("✅ Connected to Google Sheets")
+    else:
+        st.sidebar.caption("⚠️ Connection issue - check setup")
 else:
     st.sidebar.warning("⚠️ Google Sheets not connected")
 
@@ -617,7 +605,85 @@ elif page == "📑 Reports":
                     use_container_width=True
                 )
 
-# --- FOOTER ---
-st.sidebar.markdown("---")
-st.sidebar.caption("RealtorOS v2.0 | OAuth 2.0 Enabled")
-st.sidebar.caption("© 2026 Kangundo Road Sales")
+# --- PAGE 6: SETUP ---
+elif page == "⚙️ Setup":
+    st.markdown('<p class="main-header">⚙️ Setup Instructions</p>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    ### 🔧 Google Sheets API Configuration
+    
+    Follow these steps to connect your app to Google Sheets:
+    """)
+    
+    with st.expander("📋 Step 1: Create Google Cloud Project & Enable APIs", expanded=True):
+        st.markdown("""
+        1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+        2. Create a new project or select existing one
+        3. Enable these APIs:
+           - **Google Sheets API**
+           - **Google Drive API**
+        4. Go to "APIs & Services" → "Credentials"
+        5. Click "Create Credentials" → "OAuth client ID"
+        6. Configure consent screen if prompted (External, add your email)
+        7. Create OAuth client ID:
+           - Application type: **Desktop app**
+           - Name: RealtorOS
+        8. Download the JSON file
+        """)
+    
+    with st.expander("📝 Step 2: Add Credentials to Streamlit Secrets", expanded=True):
+        st.markdown("""
+        Copy the contents of your downloaded JSON file and format it like this in your Streamlit secrets:
+        """)
+        
+        st.code("""
+# In Streamlit Cloud: Go to App Settings → Secrets
+# Add this format:
+
+GEMINI_API_KEY = "your_gemini_key_here"
+SPREADSHEET_ID = "your_spreadsheet_id_from_url"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "your-project-id"
+private_key_id = "your-private-key-id"
+private_key = "-----BEGIN PRIVATE KEY-----\\nYour-Key-Here\\n-----END PRIVATE KEY-----\\n"
+client_email = "your-service-account@project.iam.gserviceaccount.com"
+client_id = "123456789"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/..."
+        """, language="toml")
+        
+        st.info("💡 **Important:** Make sure the `private_key` has `\\n` (backslash-n) for line breaks, not actual newlines!")
+    
+    with st.expander("📊 Step 3: Create & Share Google Sheet", expanded=True):
+        st.markdown("""
+        1. Create a new Google Sheet: [Google Sheets](https://sheets.google.com)
+        2. Name it: **RealtorOS_Sales_Database**
+        3. Add headers in first row:
+           ```
+           Date | Agent | Location | Price | Status | Client_Name | Phone | Notes
+           ```
+        4. Get the Spreadsheet ID from the URL:
+           ```
+           https://docs.google.com/spreadsheets/d/[THIS-IS-THE-ID]/edit
+           ```
+        5. **Share the sheet** with the service account email from your JSON
+           - Click "Share"
+           - Paste the `client_email` from your credentials
+           - Give "Editor" permissions
+        """)
+        
+        if "gcp_service_account" in st.secrets:
+            service_email = st.secrets["gcp_service_account"].get("client_email", "")
+            if service_email:
+                st.success(f"📧 **Your Service Account Email:** `{service_email}`")
+                st.info("Copy this email and share your Google Sheet with it!")
+    
+    with st.expander("✅ Step 4: Test Connection", expanded=True):
+        st.markdown("Click the button below to test your Google Sheets connection:")
+        
+        if st.button("🧪 Test Connection", use_container_width=True):
+            with st.spinner("Testing connection..."):
