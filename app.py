@@ -349,12 +349,14 @@ if page == "📊 Dashboard":
         # Outstanding balances
         st.markdown("---")
         st.subheader("📊 Sales Status")
-        if not ledger_df.empty:
+        if not ledger_df.empty and 'Status' in ledger_df.columns and 'Balance' in ledger_df.columns:
             outstanding = ledger_df[ledger_df['Status'] != 'Fully Paid']
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Sales", len(ledger_df))
             col2.metric("Outstanding", len(outstanding))
             col3.metric("Total Outstanding", f"KSh {outstanding['Balance'].sum():,.0f}")
+        elif not ledger_df.empty:
+            st.metric("Total Sales", len(ledger_df))
     else:
         st.info("📊 No transaction data yet. Start by recording a new sale!")
 
@@ -554,7 +556,11 @@ elif page == "💳 Payment Entry":
         st.warning("No sales in ledger. Create a sale first!")
     else:
         # Filter only sales with outstanding balance
-        outstanding = ledger_df[ledger_df['Status'] != 'Fully Paid'].copy()
+        if 'Status' in ledger_df.columns:
+            outstanding = ledger_df[ledger_df['Status'] != 'Fully Paid'].copy()
+        else:
+            st.error("⚠️ Sales Ledger is missing 'Status' column. Please use 🔧 Fix Sheets to repair.")
+            outstanding = pd.DataFrame()
         
         if outstanding.empty:
             st.info("🎉 All sales are fully paid!")
@@ -646,28 +652,43 @@ elif page == "📋 Sales Ledger":
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Sales", len(ledger_df))
-        col2.metric("Total Value", f"KSh {ledger_df['Total_Sale_Price'].sum():,.0f}")
-        col3.metric("Total Collected", f"KSh {ledger_df['Amount_Paid'].sum():,.0f}")
-        col4.metric("Outstanding", f"KSh {ledger_df['Balance'].sum():,.0f}")
+        
+        # Safe column access
+        total_value = ledger_df['Total_Sale_Price'].sum() if 'Total_Sale_Price' in ledger_df.columns else 0
+        total_collected = ledger_df['Amount_Paid'].sum() if 'Amount_Paid' in ledger_df.columns else 0
+        total_balance = ledger_df['Balance'].sum() if 'Balance' in ledger_df.columns else 0
+        
+        col2.metric("Total Value", f"KSh {total_value:,.0f}")
+        col3.metric("Total Collected", f"KSh {total_collected:,.0f}")
+        col4.metric("Outstanding", f"KSh {total_balance:,.0f}")
         
         st.markdown("---")
         
         # Filter options
         col1, col2 = st.columns(2)
         with col1:
-            status_filter = st.multiselect("Filter by Status", 
-                                          ledger_df['Status'].unique(),
-                                          default=ledger_df['Status'].unique())
+            if 'Status' in ledger_df.columns:
+                status_filter = st.multiselect("Filter by Status", 
+                                              ledger_df['Status'].unique(),
+                                              default=ledger_df['Status'].unique())
+            else:
+                status_filter = []
         with col2:
-            agent_filter = st.multiselect("Filter by Agent",
-                                         ledger_df['Agent'].unique(),
-                                         default=ledger_df['Agent'].unique())
+            if 'Agent' in ledger_df.columns:
+                agent_filter = st.multiselect("Filter by Agent",
+                                             ledger_df['Agent'].unique(),
+                                             default=ledger_df['Agent'].unique())
+            else:
+                agent_filter = []
         
         # Apply filters
-        filtered = ledger_df[
-            (ledger_df['Status'].isin(status_filter)) &
-            (ledger_df['Agent'].isin(agent_filter))
-        ]
+        if status_filter and 'Status' in ledger_df.columns:
+            filtered = ledger_df[ledger_df['Status'].isin(status_filter)]
+        else:
+            filtered = ledger_df
+            
+        if agent_filter and 'Agent' in filtered.columns:
+            filtered = filtered[filtered['Agent'].isin(agent_filter)]
         
         st.dataframe(filtered, use_container_width=True, height=400)
         
@@ -896,15 +917,21 @@ elif page == "📑 Reports":
             
             with col1:
                 st.metric("Total Transactions", len(trans_df))
-                st.metric("Total Revenue", f"KSh {trans_df['Amount'].sum():,.0f}")
-                new_sales = trans_df[trans_df['Payment_Type'] == 'New Sale']['Amount'].sum()
-                st.metric("New Business", f"KSh {new_sales:,.0f}")
+                total_revenue = trans_df['Amount'].sum() if 'Amount' in trans_df.columns else 0
+                st.metric("Total Revenue", f"KSh {total_revenue:,.0f}")
+                
+                if 'Payment_Type' in trans_df.columns and 'Amount' in trans_df.columns:
+                    new_sales = trans_df[trans_df['Payment_Type'] == 'New Sale']['Amount'].sum()
+                    st.metric("New Business", f"KSh {new_sales:,.0f}")
             
             with col2:
                 st.metric("Total Sales", len(ledger_df))
-                st.metric("Outstanding Balance", f"KSh {ledger_df['Balance'].sum():,.0f}")
-                installments = trans_df[trans_df['Payment_Type'] == 'Installment']['Amount'].sum()
-                st.metric("Installment Revenue", f"KSh {installments:,.0f}")
+                outstanding_balance = ledger_df['Balance'].sum() if 'Balance' in ledger_df.columns else 0
+                st.metric("Outstanding Balance", f"KSh {outstanding_balance:,.0f}")
+                
+                if 'Payment_Type' in trans_df.columns and 'Amount' in trans_df.columns:
+                    installments = trans_df[trans_df['Payment_Type'] == 'Installment']['Amount'].sum()
+                    st.metric("Installment Revenue", f"KSh {installments:,.0f}")
             
             # Combined Excel
             excel_buffer = BytesIO()
@@ -912,12 +939,15 @@ elif page == "📑 Reports":
                 trans_df.to_excel(writer, sheet_name='Transactions', index=False)
                 ledger_df.to_excel(writer, sheet_name='Sales Ledger', index=False)
                 
-                summary = pd.DataFrame({
+                summary_data = {
                     'Metric': ['Total Transactions', 'Total Revenue', 'New Business', 
                               'Installment Revenue', 'Total Sales', 'Outstanding Balance'],
-                    'Value': [len(trans_df), trans_df['Amount'].sum(), new_sales,
-                             installments, len(ledger_df), ledger_df['Balance'].sum()]
-                })
+                    'Value': [len(trans_df), total_revenue, 
+                             new_sales if 'new_sales' in locals() else 0,
+                             installments if 'installments' in locals() else 0, 
+                             len(ledger_df), outstanding_balance]
+                }
+                summary = pd.DataFrame(summary_data)
                 summary.to_excel(writer, sheet_name='Summary', index=False)
             
             st.download_button("📥 Download Complete Report",
@@ -940,7 +970,7 @@ elif page == "🤖 AI Insights":
         if trans_df.empty and ledger_df.empty:
             st.warning("⚠️ No data available. Add some sales first to get AI insights!")
         else:
-            st.success("✅ gemini-2.5-flash-lite Ready")
+            st.success("✅ gemini-2.5-flash-lite")
             
             # Insight Options
             insight_type = st.selectbox(
