@@ -240,8 +240,8 @@ else:
     st.sidebar.error("❌ Not connected")
 
 page = st.sidebar.radio("Navigate to:", 
-    ["📊 Dashboard", "💰 New Sale", "💳 Payment Entry", "📋 Sales Ledger", 
-     "🎯 Targets", "✏️ Edit/Delete", "👥 Team", "📑 Reports", "🤖 AI Insights"])
+    ["📊 Dashboard", "💰 New Sale", "📜 Import Old Sale", "💳 Payment Entry", 
+     "📋 Sales Ledger", "🎯 Targets", "✏️ Edit/Delete", "👥 Team", "📑 Reports", "🤖 AI Insights"])
 
 # --- PAGE 1: DASHBOARD ---
 if page == "📊 Dashboard":
@@ -406,7 +406,126 @@ elif page == "💰 New Sale":
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
 
-# --- PAGE 3: PAYMENT ENTRY ---
+# --- PAGE 3: IMPORT OLD SALE ---
+elif page == "📜 Import Old Sale":
+    st.markdown('<p class="main-header">📜 Import Existing/Historical Sale</p>', unsafe_allow_html=True)
+    
+    st.info("""
+    💡 **Use this for:**
+    - Sales made before using this system
+    - Migrating data from old records
+    - Customers already on installment plans
+    
+    ⚠️ **This will NOT count as new revenue** - it only tracks remaining balance.
+    """)
+    
+    with st.form("import_sale_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📋 Sale Information")
+            original_sale_date = st.date_input("Original Sale Date*", 
+                                               datetime.date.today() - timedelta(days=180),
+                                               help="When was this sale originally made?")
+            client_name = st.text_input("Client Name*", placeholder="e.g., John Doe")
+            phone = st.text_input("Phone Number*", placeholder="0712345678")
+            agent = st.selectbox("Sales Agent*", st.session_state.agents)
+            location = st.selectbox("Location*", ["Malaa", "Joska", "Kamulu", "Other"])
+        
+        with col2:
+            st.subheader("💰 Financial Details")
+            total_price = st.number_input("Total Original Sale Price (KSh)*", 
+                                         min_value=0, step=100000, value=2500000,
+                                         help="Full agreed price")
+            amount_already_paid = st.number_input("Amount Already Paid (KSh)*", 
+                                                 min_value=0, step=50000, value=500000,
+                                                 help="Total paid before importing to this system")
+            
+            remaining_balance = total_price - amount_already_paid
+            
+            st.metric("Remaining Balance", f"KSh {remaining_balance:,.0f}",
+                     help="This is what the customer still owes")
+        
+        notes = st.text_area("Notes", 
+                            placeholder="e.g., 'Legacy sale from 2024, customer has been paying monthly installments'")
+        
+        st.warning("⚠️ **Important:** Past payments will NOT be added to Transactions (to keep revenue metrics accurate). Only future payments will be tracked.")
+        
+        submitted = st.form_submit_button("📥 Import Historical Sale", use_container_width=True)
+        
+        if submitted:
+            if not client_name or not phone:
+                st.error("❌ Please fill in all required fields (*)")
+            elif amount_already_paid > total_price:
+                st.error("❌ Amount paid cannot exceed total price")
+            elif remaining_balance <= 0:
+                st.error("❌ Cannot import fully paid sales. Remaining balance must be > 0")
+            else:
+                client = get_gsheet_client()
+                if client and SPREADSHEET_ID:
+                    try:
+                        sh = client.open_by_key(SPREADSHEET_ID)
+                        
+                        # Generate unique IDs
+                        sale_id = f"LEGACY-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+                        client_id = f"CLIENT-{uuid.uuid4().hex[:8].upper()}"
+                        
+                        # Add to Sales Ledger ONLY (no transaction record)
+                        status = "Installment Plan"
+                        import_note = f"[HISTORICAL IMPORT] {notes}" if notes else "[HISTORICAL IMPORT] Legacy sale imported into system"
+                        
+                        ledger_row = [sale_id, client_id, client_name, phone, agent, location,
+                                     str(total_price), str(amount_already_paid), str(remaining_balance),
+                                     str(original_sale_date), status, import_note]
+                        
+                        ledger_ws = sh.worksheet("Sales_Ledger")
+                        ledger_ws.append_row(ledger_row)
+                        
+                        st.success(f"✅ Historical sale imported! Sale ID: {sale_id}")
+                        st.balloons()
+                        
+                        # Show summary
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Total Value", f"KSh {total_price:,}")
+                        col2.metric("Already Paid", f"KSh {amount_already_paid:,}")
+                        col3.metric("Balance to Track", f"KSh {remaining_balance:,}")
+                        
+                        st.info("""
+                        ✅ **Next Steps:**
+                        1. Go to "💳 Payment Entry" to record future payments
+                        2. Future payments WILL be counted in revenue metrics
+                        3. This sale appears in Sales Ledger with [HISTORICAL IMPORT] tag
+                        """)
+                        
+                        # Refresh data
+                        st.session_state.ledger_data = load_sales_ledger()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+    
+    # Show example
+    with st.expander("📖 Example Use Case"):
+        st.markdown("""
+        **Scenario:** You sold a plot to Jane Doe in June 2024 for KSh 3,000,000
+        
+        - She paid KSh 1,000,000 deposit in June
+        - She's been paying KSh 100,000 monthly since then
+        - Total paid so far: KSh 1,600,000
+        - Balance remaining: KSh 1,400,000
+        
+        **How to import:**
+        1. Original Sale Date: `2024-06-15`
+        2. Total Price: `3,000,000`
+        3. Amount Already Paid: `1,600,000` (all past payments combined)
+        4. Balance: `1,400,000` (auto-calculated)
+        
+        **Result:**
+        - Sale added to ledger with balance tracking
+        - Past KSh 1,600,000 NOT counted in current revenue
+        - Future payments WILL count in revenue when recorded
+        """)
+
+# --- PAGE 4: PAYMENT ENTRY ---
 elif page == "💳 Payment Entry":
     st.markdown('<p class="main-header">💳 Log Payment (Installment)</p>', unsafe_allow_html=True)
     
@@ -498,7 +617,7 @@ elif page == "💳 Payment Entry":
                             except Exception as e:
                                 st.error(f"❌ Error: {e}")
 
-# --- PAGE 4: SALES LEDGER ---
+# --- PAGE 5: SALES LEDGER ---
 elif page == "📋 Sales Ledger":
     st.markdown('<p class="main-header">📋 Sales Ledger</p>', unsafe_allow_html=True)
     
@@ -540,7 +659,7 @@ elif page == "📋 Sales Ledger":
     else:
         st.info("No sales recorded yet")
 
-# --- PAGE 5: TARGETS ---
+# --- PAGE 6: TARGETS ---
 elif page == "🎯 Targets":
     st.markdown('<p class="main-header">🎯 Revenue Targets</p>', unsafe_allow_html=True)
     
@@ -606,7 +725,7 @@ elif page == "🎯 Targets":
         st.subheader("Current Targets")
         st.dataframe(targets_df, use_container_width=True)
 
-# --- PAGE 6: EDIT/DELETE ---
+# --- PAGE 7: EDIT/DELETE ---
 elif page == "✏️ Edit/Delete":
     st.markdown('<p class="main-header">✏️ Edit/Delete Records</p>', unsafe_allow_html=True)
     
@@ -684,7 +803,7 @@ elif page == "✏️ Edit/Delete":
         else:
             st.info("No sales to delete")
 
-# --- PAGE 7: TEAM ---
+# --- PAGE 8: TEAM ---
 elif page == "👥 Team":
     st.markdown('<p class="main-header">👥 Team Management</p>', unsafe_allow_html=True)
     
@@ -715,7 +834,7 @@ elif page == "👥 Team":
     for i, agent in enumerate(st.session_state.agents, 1):
         st.write(f"{i}. **{agent}**")
 
-# --- PAGE 8: REPORTS ---
+# --- PAGE 9: REPORTS ---
 elif page == "📑 Reports":
     st.markdown('<p class="main-header">📑 Reports & Export</p>', unsafe_allow_html=True)
     
@@ -787,7 +906,7 @@ elif page == "📑 Reports":
                              f"Complete_Report_{datetime.date.today()}.xlsx",
                              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# --- PAGE 9: AI INSIGHTS ---
+# --- PAGE 10: AI INSIGHTS ---
 elif page == "🤖 AI Insights":
     st.markdown('<p class="main-header">🤖 AI-Powered Business Insights</p>', unsafe_allow_html=True)
     
