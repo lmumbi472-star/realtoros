@@ -139,8 +139,21 @@ if 'sales_data' not in st.session_state or st.sidebar.button("🔄 Refresh Data"
 # --- 4. NAVIGATION ---
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/609/609036.png", width=100)
 st.sidebar.title("RealtorOS Menu")
+
+# Add connection status indicator
+if get_gsheet_client() and SPREADSHEET_ID:
+    st.sidebar.success("✅ Connected to Google Sheets")
+    # Show data count
+    df_count = st.session_state.sales_data
+    if not df_count.empty and len(df_count) > 0:
+        st.sidebar.info(f"📊 {len(df_count)} sales records loaded")
+    else:
+        st.sidebar.warning("📝 No sales data yet")
+else:
+    st.sidebar.error("❌ Not connected to Google Sheets")
+
 page = st.sidebar.radio("Navigate to:", 
-    ["📊 Dashboard & AI Coach", "📝 Log New Sale", "🎯 Revenue Targets", "👥 Team Management", "📑 Reports & PDF"])
+    ["📊 Dashboard & AI Coach", "📝 Log New Sale", "🎯 Revenue Targets", "👥 Team Management", "📑 Reports & PDF", "🔧 Debug Connection"])
 
 # --- PAGE 1: DASHBOARD & AI COACH ---
 if page == "📊 Dashboard & AI Coach":
@@ -269,6 +282,13 @@ if page == "📊 Dashboard & AI Coach":
 elif page == "📝 Log New Sale":
     st.markdown('<p class="main-header">📝 Record New Sale</p>', unsafe_allow_html=True)
     
+    # Show current data count
+    current_data = st.session_state.sales_data
+    if not current_data.empty and len(current_data) > 0:
+        st.info(f"📊 Currently tracking {len(current_data)} sales worth KSh {current_data['Price'].sum():,.0f}")
+    else:
+        st.info("🎯 Ready to log your first sale!")
+    
     with st.form("entry_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         
@@ -278,13 +298,13 @@ elif page == "📝 Log New Sale":
             location = st.selectbox("Location", ["Malaa", "Joska", "Kamulu", "Other"])
         
         with col2:
-            price = st.number_input("Sale Price (KSh)", min_value=0, step=50000, value=0)
-            client = st.text_input("Client Name")
-            phone = st.text_input("Phone Number")
+            price = st.number_input("Sale Price (KSh)", min_value=0, step=50000, value=1000000)
+            client = st.text_input("Client Name", placeholder="e.g., John Doe")
+            phone = st.text_input("Phone Number", placeholder="e.g., 0712345678")
         
-        notes = st.text_area("Additional Notes (Optional)")
+        notes = st.text_area("Additional Notes (Optional)", placeholder="Any special details about this sale...")
         
-        submitted = st.form_submit_button("🚀 Save to Google Sheets")
+        submitted = st.form_submit_button("🚀 Save to Google Sheets", use_container_width=True)
         
         if submitted:
             # Validation
@@ -301,32 +321,59 @@ elif page == "📝 Log New Sale":
                     st.error("❌ SPREADSHEET_ID not configured in secrets")
                 else:
                     try:
-                        new_row = [
-                            str(sale_date), 
-                            agent, 
-                            location, 
-                            str(price), 
-                            "Sold", 
-                            client, 
-                            phone, 
-                            notes
-                        ]
-                        
-                        sh = client_gs.open_by_key(SPREADSHEET_ID)
-                        sh.sheet1.append_row(new_row)
-                        
-                        st.success("✅ Sale recorded successfully!")
-                        st.balloons()
-                        
-                        # Refresh data
-                        st.session_state.sales_data = load_data()
-                        
-                        # Show success details
-                        st.info(f"💰 **{agent}** sold property in **{location}** for **KSh {price:,}**")
-                        
+                        with st.spinner("💾 Saving to Google Sheets..."):
+                            new_row = [
+                                str(sale_date), 
+                                agent, 
+                                location, 
+                                str(price), 
+                                "Sold", 
+                                client, 
+                                phone, 
+                                notes
+                            ]
+                            
+                            sh = client_gs.open_by_key(SPREADSHEET_ID)
+                            sh.sheet1.append_row(new_row)
+                            
+                            st.success("✅ Sale recorded successfully!")
+                            st.balloons()
+                            
+                            # Refresh data
+                            st.session_state.sales_data = load_data()
+                            
+                            # Show success details
+                            st.info(f"💰 **{agent}** sold property in **{location}** for **KSh {price:,}** to **{client}**")
+                            st.info("🔄 Data refreshed! Go to Dashboard to see your updated stats.")
+                            
                     except Exception as e:
                         st.error(f"❌ Error saving to Google Sheets: {e}")
                         st.info("Please check your SPREADSHEET_ID and permissions")
+    
+    # Quick Test Entry Button
+    st.markdown("---")
+    st.subheader("🧪 Quick Test")
+    if st.button("➕ Add Sample Sale (for testing)", type="secondary"):
+        client_gs = get_gsheet_client()
+        if client_gs and SPREADSHEET_ID:
+            try:
+                sample_row = [
+                    str(datetime.date.today()),
+                    "Manager",
+                    "Malaa",
+                    "2500000",
+                    "Sold",
+                    "Sample Client",
+                    "0700000000",
+                    "Test entry"
+                ]
+                sh = client_gs.open_by_key(SPREADSHEET_ID)
+                sh.sheet1.append_row(sample_row)
+                st.success("✅ Sample sale added! Refresh to see it.")
+                st.session_state.sales_data = load_data()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 # --- PAGE 3: REVENUE TARGETS ---
 elif page == "🎯 Revenue Targets":
@@ -561,3 +608,109 @@ elif page == "📑 Reports & PDF":
 st.sidebar.markdown("---")
 st.sidebar.markdown("**RealtorOS Executive v2.0**")
 st.sidebar.markdown("Powered by Gemini 2.0 Flash")
+
+# --- DEBUG PAGE ---
+if page == "🔧 Debug Connection":
+    st.markdown('<p class="main-header">🔧 Connection Debugger</p>', unsafe_allow_html=True)
+    
+    st.subheader("1️⃣ Secrets Configuration")
+    col1, col2 = st.columns(2)
+    with col1:
+        if GEMINI_API_KEY:
+            st.success(f"✅ GEMINI_API_KEY: Configured ({GEMINI_API_KEY[:20]}...)")
+        else:
+            st.error("❌ GEMINI_API_KEY: Missing")
+    
+    with col2:
+        if SPREADSHEET_ID:
+            st.success(f"✅ SPREADSHEET_ID: {SPREADSHEET_ID}")
+        else:
+            st.error("❌ SPREADSHEET_ID: Missing")
+    
+    st.markdown("---")
+    st.subheader("2️⃣ Google Sheets Connection")
+    
+    if st.button("🧪 Test Connection", type="primary"):
+        try:
+            with st.spinner("Testing connection..."):
+                client = get_gsheet_client()
+                
+                if not client:
+                    st.error("❌ Failed to create Google Sheets client")
+                    st.info("Check that gcp_service_account is properly configured in secrets")
+                else:
+                    st.success("✅ Google Sheets client created")
+                    
+                    # Try to open spreadsheet
+                    try:
+                        sh = client.open_by_key(SPREADSHEET_ID)
+                        st.success(f"✅ Opened spreadsheet: **{sh.title}**")
+                        
+                        # Try to read sheet1
+                        ws = sh.sheet1
+                        st.success(f"✅ Accessed worksheet: **{ws.title}**")
+                        
+                        # Get all data
+                        all_data = ws.get_all_values()
+                        st.success(f"✅ Retrieved data: **{len(all_data)} rows**")
+                        
+                        # Display raw data
+                        st.subheader("📊 Raw Data from Sheet")
+                        if len(all_data) > 0:
+                            st.write("**Headers:**", all_data[0])
+                            st.write(f"**Data rows:** {len(all_data) - 1}")
+                            
+                            # Show all data in a table
+                            if len(all_data) > 1:
+                                st.dataframe(pd.DataFrame(all_data[1:], columns=all_data[0]))
+                            else:
+                                st.info("Sheet has headers but no data rows yet")
+                        else:
+                            st.warning("Sheet is completely empty")
+                            
+                    except gspread.exceptions.SpreadsheetNotFound:
+                        st.error("❌ Spreadsheet not found with that ID")
+                        st.info(f"Check if this ID is correct: {SPREADSHEET_ID}")
+                    except gspread.exceptions.APIError as e:
+                        st.error(f"❌ API Error: {e}")
+                        st.info("This usually means the APIs aren't enabled or there's a permission issue")
+                        
+        except Exception as e:
+            st.error(f"❌ Connection test failed: {e}")
+            st.code(str(e))
+    
+    st.markdown("---")
+    st.subheader("3️⃣ Loaded Data in App")
+    
+    df = st.session_state.sales_data
+    
+    st.write(f"**DataFrame Shape:** {df.shape}")
+    st.write(f"**Columns:** {list(df.columns)}")
+    st.write(f"**Rows:** {len(df)}")
+    st.write(f"**Empty:** {df.empty}")
+    
+    if not df.empty:
+        st.subheader("📊 Current Data in Memory")
+        st.dataframe(df)
+        
+        if 'Price' in df.columns:
+            st.metric("Total Revenue", f"KSh {df['Price'].sum():,.0f}")
+    else:
+        st.warning("No data loaded in app memory")
+    
+    st.markdown("---")
+    st.subheader("4️⃣ Share Settings Check")
+    st.info(f"""
+    **Make sure you've shared your Google Sheet with:**
+    
+    `my-sheet-robot@realtoros-483209.iam.gserviceaccount.com`
+    
+    With **Editor** permissions!
+    """)
+    
+    st.markdown("---")
+    st.subheader("5️⃣ Manual Refresh")
+    if st.button("🔄 Force Reload Data from Sheet"):
+        st.session_state.sales_data = load_data()
+        st.success("✅ Data reloaded!")
+        st.rerun()
