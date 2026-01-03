@@ -128,13 +128,20 @@ def load_transactions():
             return pd.DataFrame(columns=['Transaction_ID', 'Date', 'Agent', 'Location', 'Client_ID', 
                                         'Amount', 'Payment_Type', 'Phone', 'Sale_ID', 'Notes'])
         
+        # Use actual headers from sheet
         df = pd.DataFrame(data[1:], columns=data[0])
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
+        # Handle columns with error checking
+        if 'Amount' in df.columns:
+            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        
         return df
     except Exception as e:
         st.sidebar.error(f"Error loading transactions: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=['Transaction_ID', 'Date', 'Agent', 'Location', 'Client_ID', 
+                                    'Amount', 'Payment_Type', 'Phone', 'Sale_ID', 'Notes'])
 
 def load_sales_ledger():
     """Load sales ledger"""
@@ -152,15 +159,26 @@ def load_sales_ledger():
                                         'Location', 'Total_Sale_Price', 'Amount_Paid', 'Balance', 
                                         'Sale_Date', 'Status', 'Notes'])
         
+        # Use actual headers from sheet instead of hardcoded
         df = pd.DataFrame(data[1:], columns=data[0])
-        df['Total_Sale_Price'] = pd.to_numeric(df['Total_Sale_Price'], errors='coerce').fillna(0)
-        df['Amount_Paid'] = pd.to_numeric(df['Amount_Paid'], errors='coerce').fillna(0)
-        df['Balance'] = pd.to_numeric(df['Balance'], errors='coerce').fillna(0)
-        df['Sale_Date'] = pd.to_datetime(df['Sale_Date'], errors='coerce')
+        
+        # Handle numeric columns with error checking
+        if 'Total_Sale_Price' in df.columns:
+            df['Total_Sale_Price'] = pd.to_numeric(df['Total_Sale_Price'], errors='coerce').fillna(0)
+        if 'Amount_Paid' in df.columns:
+            df['Amount_Paid'] = pd.to_numeric(df['Amount_Paid'], errors='coerce').fillna(0)
+        if 'Balance' in df.columns:
+            df['Balance'] = pd.to_numeric(df['Balance'], errors='coerce').fillna(0)
+        if 'Sale_Date' in df.columns:
+            df['Sale_Date'] = pd.to_datetime(df['Sale_Date'], errors='coerce')
+        
         return df
     except Exception as e:
         st.sidebar.error(f"Error loading ledger: {e}")
-        return pd.DataFrame()
+        # Return empty dataframe with expected columns
+        return pd.DataFrame(columns=['Sale_ID', 'Client_ID', 'Client_Name', 'Phone', 'Agent', 
+                                    'Location', 'Total_Sale_Price', 'Amount_Paid', 'Balance', 
+                                    'Sale_Date', 'Status', 'Notes'])
 
 def load_targets():
     """Load revenue targets"""
@@ -241,7 +259,8 @@ else:
 
 page = st.sidebar.radio("Navigate to:", 
     ["📊 Dashboard", "💰 New Sale", "📜 Import Old Sale", "💳 Payment Entry", 
-     "📋 Sales Ledger", "🎯 Targets", "✏️ Edit/Delete", "👥 Team", "📑 Reports", "🤖 AI Insights"])
+     "📋 Sales Ledger", "🎯 Targets", "✏️ Edit/Delete", "👥 Team", "📑 Reports", 
+     "🤖 AI Insights", "🔧 Fix Sheets"])
 
 # --- PAGE 1: DASHBOARD ---
 if page == "📊 Dashboard":
@@ -1085,6 +1104,158 @@ Data Summary:
                 - **Forecasting:** "What revenue can we expect next month?"
                 - **Comparison:** "How does this year compare to industry standards?"
                 """)
+
+# --- PAGE 11: FIX SHEETS ---
+elif page == "🔧 Fix Sheets":
+    st.markdown('<p class="main-header">🔧 Sheet Repair Tool</p>', unsafe_allow_html=True)
+    
+    st.info("Use this tool to diagnose and fix sheet structure issues")
+    
+    client = get_gsheet_client()
+    if not client or not SPREADSHEET_ID:
+        st.error("❌ Not connected to Google Sheets")
+    else:
+        try:
+            sh = client.open_by_key(SPREADSHEET_ID)
+            
+            st.subheader("📋 Current Sheet Status")
+            
+            # Check each sheet
+            sheets_status = {}
+            
+            # Check Transactions
+            try:
+                trans_ws = sh.worksheet("Transactions")
+                trans_data = trans_ws.get_all_values()
+                expected_trans = ['Transaction_ID', 'Date', 'Agent', 'Location', 'Client_ID', 
+                                'Amount', 'Payment_Type', 'Phone', 'Sale_ID', 'Notes']
+                actual_trans = trans_data[0] if trans_data else []
+                sheets_status['Transactions'] = {
+                    'exists': True,
+                    'headers': actual_trans,
+                    'expected': expected_trans,
+                    'match': actual_trans == expected_trans,
+                    'rows': len(trans_data) - 1 if trans_data else 0
+                }
+            except:
+                sheets_status['Transactions'] = {'exists': False}
+            
+            # Check Sales_Ledger
+            try:
+                ledger_ws = sh.worksheet("Sales_Ledger")
+                ledger_data = ledger_ws.get_all_values()
+                expected_ledger = ['Sale_ID', 'Client_ID', 'Client_Name', 'Phone', 'Agent', 
+                                 'Location', 'Total_Sale_Price', 'Amount_Paid', 'Balance', 
+                                 'Sale_Date', 'Status', 'Notes']
+                actual_ledger = ledger_data[0] if ledger_data else []
+                sheets_status['Sales_Ledger'] = {
+                    'exists': True,
+                    'headers': actual_ledger,
+                    'expected': expected_ledger,
+                    'match': actual_ledger == expected_ledger,
+                    'rows': len(ledger_data) - 1 if ledger_data else 0
+                }
+            except:
+                sheets_status['Sales_Ledger'] = {'exists': False}
+            
+            # Check Targets
+            try:
+                target_ws = sh.worksheet("Targets")
+                target_data = target_ws.get_all_values()
+                expected_targets = ['Year', 'Period_Type', 'Period_Number', 'Target_Amount', 'Last_Updated', 'Notes']
+                actual_targets = target_data[0] if target_data else []
+                sheets_status['Targets'] = {
+                    'exists': True,
+                    'headers': actual_targets,
+                    'expected': expected_targets,
+                    'match': actual_targets == expected_targets,
+                    'rows': len(target_data) - 1 if target_data else 0
+                }
+            except:
+                sheets_status['Targets'] = {'exists': False}
+            
+            # Display status
+            for sheet_name, status in sheets_status.items():
+                with st.expander(f"📊 {sheet_name}", expanded=not status.get('match', False)):
+                    if not status['exists']:
+                        st.error(f"❌ Sheet does not exist")
+                        if st.button(f"Create {sheet_name}", key=f"create_{sheet_name}"):
+                            initialize_sheets()
+                            st.success(f"✅ {sheet_name} created!")
+                            st.rerun()
+                    else:
+                        if status['match']:
+                            st.success(f"✅ Headers are correct ({status['rows']} rows)")
+                        else:
+                            st.warning(f"⚠️ Header mismatch detected ({status['rows']} rows)")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write("**Expected Headers:**")
+                                for h in status['expected']:
+                                    st.write(f"- {h}")
+                            with col2:
+                                st.write("**Actual Headers:**")
+                                for h in status['headers']:
+                                    st.write(f"- {h}")
+                            
+                            st.error("⚠️ **This mismatch is causing the error!**")
+                            
+                            if st.button(f"🔧 Fix {sheet_name} Headers", key=f"fix_{sheet_name}", type="primary"):
+                                st.warning("⚠️ **BACKUP YOUR DATA FIRST!** This will update row 1 (headers only)")
+                                
+                                if st.button(f"✅ Confirm Fix for {sheet_name}", key=f"confirm_{sheet_name}"):
+                                    try:
+                                        if sheet_name == "Transactions":
+                                            ws = sh.worksheet("Transactions")
+                                            # Update only the header row
+                                            for i, header in enumerate(expected_trans, 1):
+                                                ws.update_cell(1, i, header)
+                                        elif sheet_name == "Sales_Ledger":
+                                            ws = sh.worksheet("Sales_Ledger")
+                                            for i, header in enumerate(expected_ledger, 1):
+                                                ws.update_cell(1, i, header)
+                                        elif sheet_name == "Targets":
+                                            ws = sh.worksheet("Targets")
+                                            for i, header in enumerate(expected_targets, 1):
+                                                ws.update_cell(1, i, header)
+                                        
+                                        st.success(f"✅ {sheet_name} headers fixed!")
+                                        st.balloons()
+                                        st.info("Click '🔄 Refresh Data' in sidebar to reload")
+                                    except Exception as e:
+                                        st.error(f"❌ Error: {e}")
+            
+            st.markdown("---")
+            st.subheader("🔄 Quick Actions")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("🔄 Refresh All Data", use_container_width=True):
+                    st.session_state.transactions_data = load_transactions()
+                    st.session_state.ledger_data = load_sales_ledger()
+                    st.session_state.targets_data = load_targets()
+                    st.success("✅ Data refreshed!")
+            
+            with col2:
+                if st.button("🔧 Reinitialize All Sheets", use_container_width=True):
+                    st.warning("⚠️ This will create missing sheets and add headers to empty sheets")
+                    if st.button("✅ Confirm Reinitialize"):
+                        if initialize_sheets():
+                            st.success("✅ Sheets reinitialized!")
+                            st.rerun()
+            
+            with col3:
+                if st.button("📊 View Raw Data", use_container_width=True):
+                    st.write("**Transactions Raw:**")
+                    st.code(str(trans_data[:5]) if 'trans_data' in locals() else "No data")
+                    st.write("**Sales Ledger Raw:**")
+                    st.code(str(ledger_data[:5]) if 'ledger_data' in locals() else "No data")
+                    
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+            st.info("Check your SPREADSHEET_ID and service account permissions")
 
 # Footer
 st.sidebar.markdown("---")
