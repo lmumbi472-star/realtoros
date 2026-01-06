@@ -1141,8 +1141,7 @@ OUTSTANDING SALES DETAILS:
                                         st.balloons()
                                         st.info("Click '🔄 Refresh Data' in sidebar to reload")
                                     except Exception as e:
-                                        st.error(f"❌ Error: {e}")
-            
+                                        st.error(f"❌ Error: {e}"
             st.markdown("---")
             st.subheader("🔄 Quick Actions")
             
