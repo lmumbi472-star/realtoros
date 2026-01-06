@@ -586,6 +586,67 @@ elif page == "🎯 Targets":
     
     today = datetime.datetime.now()
     
+    # Quick Set for Current Period
+    with st.expander("⚡ Quick Set - Current Period Targets", expanded=True):
+        st.info(f"""
+        **Current Period:** Week {get_week_number(today)}, Month {today.month}, Quarter {get_quarter(today)}, Year {today.year}
+        
+        Use this to quickly set targets for the active period you're in right now.
+        """)
+        
+        with st.form("quick_target_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                quick_week = st.number_input("This Week Target (KSh)", 
+                                            min_value=0, step=100000, 
+                                            value=int(suggested['Week']))
+                quick_month = st.number_input("This Month Target (KSh)", 
+                                             min_value=0, step=500000, 
+                                             value=int(suggested['Month']))
+            
+            with col2:
+                quick_quarter = st.number_input("This Quarter Target (KSh)", 
+                                               min_value=0, step=1000000, 
+                                               value=int(suggested['Quarter']))
+                quick_year = st.number_input("This Year Target (KSh)", 
+                                            min_value=0, step=5000000, 
+                                            value=int(suggested['Year']))
+            
+            if st.form_submit_button("⚡ Set All Current Period Targets", use_container_width=True):
+                client = get_gsheet_client()
+                if client and SPREADSHEET_ID:
+                    try:
+                        sh = client.open_by_key(SPREADSHEET_ID)
+                        ws = sh.worksheet("Targets")
+                        
+                        current_week = get_week_number(today)
+                        current_month = today.month
+                        current_quarter = get_quarter(today)
+                        current_year = today.year
+                        
+                        # Add all four targets
+                        targets_to_add = [
+                            [str(current_year), "Week", str(current_week), str(quick_week), str(datetime.date.today()), f"Week {current_week} target"],
+                            [str(current_year), "Month", str(current_month), str(quick_month), str(datetime.date.today()), f"Month {current_month} target"],
+                            [str(current_year), "Quarter", str(current_quarter), str(quick_quarter), str(datetime.date.today()), f"Q{current_quarter} target"],
+                            [str(current_year), "Year", "1", str(quick_year), str(datetime.date.today()), f"{current_year} target"]
+                        ]
+                        
+                        for row in targets_to_add:
+                            ws.append_row(row)
+                        
+                        st.success("✅ All current period targets set!")
+                        st.balloons()
+                        st.session_state.targets_data = load_targets()
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+    
+    st.markdown("---")
+    st.subheader("Set Individual Target")
+    
     with st.form("target_form"):
         target_year = st.number_input("Year", min_value=2024, max_value=2030, value=today.year)
         
