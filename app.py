@@ -654,4 +654,20 @@ elif page == "✏️ Edit/Delete":
                 selected = trans_df[trans_df['Display'] == to_delete].iloc[0]
                 
                 client = get_gsheet_client()
-                if
+                if client and SPREADSHEET_ID:
+                    try:
+                        sh = client.open_by_key(SPREADSHEET_ID)
+                        ws = sh.worksheet("Transactions")
+                        all_data = ws.get_all_values()
+                        
+                        for i, row in enumerate(all_data[1:], start=2):
+                            if row[0] == selected['Transaction_ID']:
+                                ws.delete_rows(i)
+                                st.success(f"✅ Transaction {selected['Transaction_ID']} deleted")
+                                st.session_state.transactions_data = load_transactions()
+                                st.rerun()
+                                break
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+        else:
+            st.info("No transactions to delete")
